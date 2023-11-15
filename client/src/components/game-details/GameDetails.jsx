@@ -25,7 +25,7 @@ export default function GameDetails() {
                 formData.get("comment"),
                 
             );
-            console.log(newComment);           
+            setComments(state =>[...state, newComment]);           
     };
 
     return (
