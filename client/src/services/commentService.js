@@ -8,7 +8,7 @@ export const getAll = async (gameId) => {
     });
 
     const result = await request.get(`${baseUrl}`);
-    
+
     // TODO: temp solution until migration to collections service
     return Object.values(result).filter((comment) => comment.gameId === gameId);
 };
