@@ -1,43 +1,68 @@
-import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useContext, useEffect, useReducer, useState, useMemo } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
-import * as gameService from "../../services/gameService";
-import * as commentService from "../../services/commentService";
+import * as gameService from '../../services/gameService';
+import * as commentService from '../../services/commentService';
+import AuthContext from "../../contexts/authContext";
+import reducer from './commentReducer';
+import useForm from '../../hooks/useForm';
+import { pathToUrl } from "../../utils/pathUtils";
+import Path from "../../paths";
 
 export default function GameDetails() {
+    const navigate = useNavigate();
+    const { email, userId } = useContext(AuthContext);
     const [game, setGame] = useState({});
-    const [comments, setComments] = useState([]);
+    const [comments, dispatch] = useReducer(reducer, []);
     const { gameId } = useParams();
 
     useEffect(() => {
-        gameService.getOne(gameId).then(setGame);
-        commentService.getAll(gameId).then(setComments);
+        gameService.getOne(gameId)
+            .then(setGame);
+
+        commentService.getAll(gameId)
+            .then((result) => {
+                dispatch({
+                    type: 'GET_ALL_COMMENTS',
+                    payload: result,
+                });
+            });
     }, [gameId]);
 
-    const addCommentHandler = async (e) => {
-        e.preventDefault();
-
-        const formData = new FormData(e.currentTarget);
-
+    const addCommentHandler = async (values) => {
         const newComment = await commentService.create(
-                gameId,
-                formData.get("username"),
-                formData.get("comment"),
-                
-            );
-            setComments(state =>[...state, newComment]);           
-    };
+            gameId,
+            values.comment
+        );
+
+        newComment.owner = { email };
+
+        dispatch({
+            type: 'ADD_COMMENT',
+            payload: newComment
+        })
+    }
+
+    const deleteButtonClickHandler = async () => {
+        const hasConfirmed = confirm(`Are you sure you want to delete ${game.title}`);
+
+        if (hasConfirmed) {
+            await gameService.remove(gameId);
+
+            navigate('/games');
+        }
+    }
+
+    const { values, onChange, onSubmit } = useForm(addCommentHandler, {
+        comment: '',
+    });
 
     return (
         <section id="game-details">
             <h1>Game Details</h1>
             <div className="info-section">
                 <div className="game-header">
-                    <img
-                        className="game-img"
-                        src={game.imageUrl}
-                        alt={game.title}
-                    />
+                    <img className="game-img" src={game.imageUrl} alt={game.title} />
                     <h1>{game.title}</h1>
                     <span className="levels">MaxLevel: {game.maxLevel}</span>
                     <p className="type">{game.category}</p>
@@ -48,11 +73,9 @@ export default function GameDetails() {
                 <div className="details-comments">
                     <h2>Comments:</h2>
                     <ul>
-                        {comments.map(({ _id, username, text }) => (
+                        {comments.map(({ _id, text, owner: { email } }) => (
                             <li key={_id} className="comment">
-                                <p>
-                                    {username}: {text}
-                                </p>
+                                <p>{email}: {text}</p>
                             </li>
                         ))}
                     </ul>
@@ -62,26 +85,19 @@ export default function GameDetails() {
                     )}
                 </div>
 
-                {/* <!-- Edit/Delete buttons ( Only for creator of this game )  -->
-                <div className="buttons">
-                    <a href="#" className="button">Edit</a>
-                    <a href="#" className="button">Delete</a>
-                </div> */}
+                {userId === game._ownerId && (
+                    <div className="buttons">
+                        <Link to={pathToUrl(Path.GameEdit, { gameId })} className="button">Edit</Link>
+                        <button className="button" onClick={deleteButtonClickHandler}>Delete</button>
+                    </div>
+                )}
             </div>
 
             <article className="create-comment">
                 <label>Add new comment:</label>
-                <form className="form" onSubmit={addCommentHandler}>
-                    <input type="text" name="username" placeholder="username" />
-                    <textarea
-                        name="comment"
-                        placeholder="Comment......"
-                    ></textarea>
-                    <input
-                        className="btn submit"
-                        type="submit"
-                        value="Add Comment"
-                    />
+                <form className="form" onSubmit={onSubmit}>
+                    <textarea name="comment" value={values.comment} onChange={onChange} placeholder="Comment......"></textarea>
+                    <input className="btn submit" type="submit" value="Add Comment" />
                 </form>
             </article>
         </section>
